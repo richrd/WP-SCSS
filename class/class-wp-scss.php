@@ -10,12 +10,12 @@ class Wp_Scss {
    * @var string
    * @access public
    */
-  public $scss_dir, $css_dir, $compile_method, $scssc, $compile_errors, $sourcemaps;
+  public $scss_dirs, $css_dir, $compile_method, $scssc, $compile_errors, $sourcemaps;
 
   /**
    * Set values for Wp_Scss::properties
    *
-   * @param string scss_dir - path to source directory for scss files
+   * @param string scss_dirs - array of source directories for scss files
    * @param string css_dir - path to output directory for css files
    * @param string method - type of compile (compressed, expanded, etc)
    *
@@ -23,16 +23,16 @@ class Wp_Scss {
    *
    * @var array compile_errors - catches errors from compile
    */
-  public function __construct ($scss_dir, $css_dir, $compile_method, $sourcemaps) {
+  public function __construct ($scss_dirs, $css_dir, $compile_method, $sourcemaps) {
     global $scssc;
-    $this->scss_dir       = $scss_dir;
+    $this->scss_dirs      = $scss_dirs;
     $this->css_dir        = $css_dir;
     $this->compile_method = $compile_method;
     $this->compile_errors = array();
     $scssc                = new Compiler();
 
     $scssc->setFormatter( $compile_method );
-    $scssc->setImportPaths( $this->scss_dir );
+    $scssc->setImportPaths( $this->scss_dirs );
     
     $this->sourcemaps = $sourcemaps;
   }
@@ -63,18 +63,18 @@ class Wp_Scss {
 
         if (is_writable($cache)) {
           try {
-	          $map = basename($out) . '.map';
-			  $scssc->setSourceMap(constant('Leafo\ScssPhp\Compiler::' . $instance->sourcemaps));
-			  $scssc->setSourceMapOptions(array(
-			  	'sourceMapWriteTo' => $instance->css_dir . $map, // absolute path to a file to write the map to
-				'sourceMapURL' => $map, // url of the map
-				'sourceMapBasepath' => rtrim(ABSPATH, '/'), // base path for filename normalization
-				'sourceRoot' => '/', // This value is prepended to the individual entries in the 'source' field.
-			  ));
-			  
-			  $css = $scssc->compile(file_get_contents($in), $in);
+            $map = basename($out) . '.map';
+            $scssc->setSourceMap(constant('Leafo\ScssPhp\Compiler::' . $instance->sourcemaps));
+            $scssc->setSourceMapOptions(array(
+              'sourceMapWriteTo' => $instance->css_dir . $map, // absolute path to a file to write the map to
+              'sourceMapURL' => $map, // url of the map
+              'sourceMapBasepath' => rtrim(ABSPATH, '/'), // base path for filename normalization
+              'sourceRoot' => '/', // This value is prepended to the individual entries in the 'source' field.
+            ));
 
-              file_put_contents($cache.basename($out), $css);
+            $css = $scssc->compile(file_get_contents($in), $in);
+
+            file_put_contents($cache.basename($out), $css);
           } catch (Exception $e) {
               $errors = array (
                 'file' => basename($in),
@@ -93,15 +93,17 @@ class Wp_Scss {
 
       $input_files = array();
       // Loop through directory and get .scss file that do not start with '_'
-      foreach(new DirectoryIterator($this->scss_dir) as $file) {
-        if (substr($file, 0, 1) != "_" && pathinfo($file->getFilename(), PATHINFO_EXTENSION) == 'scss') {
-          array_push($input_files, $file->getFilename());
+      foreach ($this->scss_dirs as $dir_path) {
+        foreach(new DirectoryIterator($dir_path) as $file) {
+          if (substr($file, 0, 1) != "_" && pathinfo($file->getFilename(), PATHINFO_EXTENSION) == 'scss') {
+            array_push($input_files, $dir_path.$file->getFilename());
+          }
         }
       }
       
       // For each input file, find matching css file and compile
       foreach ($input_files as $scss_file) {
-        $input = $this->scss_dir.$scss_file;
+        $input = $scss_file;
         $outputName = preg_replace("/\.[^$]*/",".css", $scss_file);
         $output = $this->css_dir.$outputName;
 
@@ -134,7 +136,7 @@ class Wp_Scss {
    * If scss is greater, we assume that changes have been made
    * and compiling needs to occur to update css.
    *
-   * @param string scss_dir - path to scss folder
+   * @param string scss_dirs - path to scss folder
    * @param string css_dir - path to css folder
    *
    * @var array sdir_arr - scss directory files
@@ -153,17 +155,23 @@ class Wp_Scss {
       $latest_scss = 0;
       $latest_css = 0;
 
-      foreach ( new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->scss_dir), FilesystemIterator::SKIP_DOTS) as $sfile ) {
-        if (pathinfo($sfile->getFilename(), PATHINFO_EXTENSION) == 'scss') {
-          $file_time = $sfile->getMTime();
+      foreach ($this->scss_dirs as $dir_path) {
+        if(!is_dir($dir_path)) {
+          continue;
+        }
 
-          if ( (int) $file_time > $latest_scss) {
-            $latest_scss = $file_time;
+        foreach ( new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir_path, RecursiveDirectoryIterator::SKIP_DOTS)) as $sfile ) {
+          if (pathinfo($sfile->getFilename(), PATHINFO_EXTENSION) == 'scss') {
+            $file_time = $sfile->getMTime();
+
+            if ( (int) $file_time > $latest_scss) {
+              $latest_scss = $file_time;
+            }
           }
         }
       }
 
-      foreach ( new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->css_dir), FilesystemIterator::SKIP_DOTS) as $cfile ) {
+      foreach ( new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->css_dir, RecursiveDirectoryIterator::SKIP_DOTS)) as $cfile ) {
         if (pathinfo($cfile->getFilename(), PATHINFO_EXTENSION) == 'css') {
           $file_time = $cfile->getMTime();
 
@@ -221,8 +229,8 @@ class Wp_Scss {
   }
 
   public function set_variables(array $variables) {
-		global $scssc;
-		$scssc->setVariables($variables);
+    global $scssc;
+    $scssc->setVariables($variables);
   }
 
 } // End Wp_Scss Class

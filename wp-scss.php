@@ -116,6 +116,13 @@ $wpscss_options = get_option( 'wpscss_options' );
 $scss_dir_setting = isset($wpscss_options['scss_dir']) ? $wpscss_options['scss_dir'] : '';
 $css_dir_setting = isset($wpscss_options['css_dir']) ? $wpscss_options['css_dir'] : '';
 
+function wpscss_scss_dirs_exist($dir_string) {
+  $paths = array_map(function($path) {
+    return WPSCSS_THEME_DIR . ($path[0] == "/" ? $path : "/" . $path);
+  }, explode(",", $dir_string));
+  return in_array(false, array_map(function($path) {return is_dir($path);}, $paths));
+}
+
 // Checks if directories are empty
 if( $scss_dir_setting == false || $css_dir_setting == false ) {
   function wpscss_settings_error() {
@@ -126,11 +133,12 @@ if( $scss_dir_setting == false || $css_dir_setting == false ) {
   add_action('admin_notices', 'wpscss_settings_error');
   return 0; //exits
 
-// Checks if directory exists
-} elseif ( !is_dir(WPSCSS_THEME_DIR . $scss_dir_setting) ) {
+// Checks that all scss directories exist
+} elseif ( wpscss_scss_dirs_exist($scss_dir_setting) ) {
   function wpscss_settings_error() {
+      // TODO: inform which dir is missing
       echo '<div class="error">
-        <p><strong>Wp-Scss:</strong> SCSS directory does not exist (' . WPSCSS_THEME_DIR . $scss_dir_setting . '). Please create the directory or <a href="' . get_bloginfo('wpurl') . '/wp-admin/admin.php?page=wpscss_options">update your settings.</a></p>
+        <p><strong>Wp-Scss:</strong> SCSS directory does not exist (' . WPSCSS_THEME_DIR . $scss_dir_setting . '). Please create he directory or <a href="' . get_bloginfo('wpurl') . '/wp-admin/admin.php?page=wpscss_options">update your settings.</a></p>
       </div>';
   }
   add_action('admin_notices', 'wpscss_settings_error');
@@ -147,7 +155,7 @@ if( $scss_dir_setting == false || $css_dir_setting == false ) {
 
 // Plugin Settings
 $wpscss_settings = array(
-  'scss_dir'   =>  WPSCSS_THEME_DIR . $scss_dir_setting,
+  'scss_dir'    =>  WPSCSS_THEME_DIR . $scss_dir_setting,
   'css_dir'    =>  WPSCSS_THEME_DIR . $css_dir_setting,
   'compiling'  =>  isset($wpscss_options['compiling_options']) ? $wpscss_options['compiling_options'] : 'Leafo\ScssPhp\Formatter\Expanded',
   'errors'     =>  isset($wpscss_options['errors']) ? $wpscss_options['errors'] : 'show',
@@ -164,8 +172,9 @@ $wpscss_settings = array(
  */
 
 global $wpscss_compiler;
+$scss_dir_arr =   array_map(function($path) {return WPSCSS_THEME_DIR . ($path[0] == "/" ? $path : "/" . $path);}, explode(",", $scss_dir_setting));
 $wpscss_compiler = new Wp_Scss(
-  $wpscss_settings['scss_dir'],
+  $scss_dir_arr,
   $wpscss_settings['css_dir'],
   $wpscss_settings['compiling'],
   $wpscss_settings['sourcemaps']
